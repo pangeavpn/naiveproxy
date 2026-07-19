@@ -399,6 +399,9 @@ target(libcxx_target_type, "libc++") {
   visibility = [
     "//build/config:common_deps",
     "//third_party/catapult/devil",
+    # pangea_naive packages libc++ into itself since it's linked into a
+    # foreign (Go) toolchain that provides no C++ runtime of its own.
+    "//net:pangea_naive",
   ]
   if (is_linux) {
     # This target packages libc++.so, so must have an explicit dependency on

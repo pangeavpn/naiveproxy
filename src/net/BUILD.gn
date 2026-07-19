@@ -2086,3 +2086,52 @@ executable("naive") {
     deps += [ "//base/allocator:early_zone_registration_apple" ]
   }
 }
+
+# Static-library twin of ":naive" for embedding the client engine into a
+# host process (e.g. Go's daemon via cgo) instead of running naive.exe as a
+# subprocess. Same sources minus naive_proxy_bin.cc (which owns main() and
+# the process-level bootstrap); pangea/capi/pangea_naive_capi.cc replaces it
+# with an extern "C" Start/Stop/Status surface. See
+# //pangea/capi/pangea_naive_capi.h.
+static_library("pangea_naive") {
+  sources = [
+    "tools/naive/http_proxy_server_socket.cc",
+    "tools/naive/http_proxy_server_socket.h",
+    "tools/naive/naive_command_line.cc",
+    "tools/naive/naive_command_line.h",
+    "tools/naive/naive_config.cc",
+    "tools/naive/naive_config.h",
+    "tools/naive/naive_connection.cc",
+    "tools/naive/naive_connection.h",
+    "tools/naive/naive_padding_framer.cc",
+    "tools/naive/naive_padding_framer.h",
+    "tools/naive/naive_padding_socket.cc",
+    "tools/naive/naive_padding_socket.h",
+    "tools/naive/naive_protocol.cc",
+    "tools/naive/naive_protocol.h",
+    "tools/naive/naive_proxy_delegate.cc",
+    "tools/naive/naive_proxy_delegate.h",
+    "tools/naive/naive_proxy.cc",
+    "tools/naive/naive_proxy.h",
+    "tools/naive/padding_utils.cc",
+    "tools/naive/padding_utils.h",
+    "tools/naive/redirect_resolver.cc",
+    "tools/naive/redirect_resolver.h",
+    "tools/naive/socks5_server_socket.cc",
+    "tools/naive/socks5_server_socket.h",
+    "tools/naive/preamble_getter.cc",
+    "tools/naive/preamble_getter.h",
+    "//pangea/capi/pangea_naive_capi.cc",
+    "//pangea/capi/pangea_naive_capi.h",
+  ]
+
+  deps = [
+    ":net",
+    "//base",
+    "//buildtools/third_party/libc++",
+    "//components/embedder_support:user_agent",
+    "//url",
+  ]
+
+  complete_static_lib = true
+}

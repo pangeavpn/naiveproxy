@@ -5,6 +5,12 @@ on:
     paths-ignore: [README.md]
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      windows_only:
+        description: "Build only the Windows jobs (for validating pangea_naive changes without the full cross-platform matrix)"
+        type: boolean
+        default: true
 defaults:
   run:
     shell: bash
@@ -16,6 +22,7 @@ env:
   SCCACHE_CACHE_SIZE: 200M
 jobs:
   cache-toolchains-posix:
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.windows_only }}
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -86,6 +93,7 @@ jobs:
             unzip ninja-win.zip -d ~/bin
           fi
   cache-toolchains-mac-x64:
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.windows_only }}
     runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
@@ -98,6 +106,7 @@ jobs:
           key: toolchains-pgo-mac-x64-${{ hashFiles('CHROMIUM_VERSION') }}-v${{ env.CACHE_EPOCH }}
       - run: EXTRA_FLAGS='target_cpu="x64"' ./get-clang.sh
   cache-toolchains-mac-arm64:
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.windows_only }}
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -110,6 +119,7 @@ jobs:
           key: toolchains-pgo-mac-arm64-${{ hashFiles('CHROMIUM_VERSION') }}-v${{ env.CACHE_EPOCH }}
       - run: EXTRA_FLAGS='target_cpu="arm64"' ./get-clang.sh
   linux:
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.windows_only }}
     needs: cache-toolchains-posix
     runs-on: ubuntu-22.04
     strategy:
@@ -190,6 +200,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   android:
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.windows_only }}
     needs: cache-toolchains-posix
     runs-on: ubuntu-22.04
     strategy:
@@ -330,6 +341,7 @@ jobs:
       - run: ./get-clang.sh
       - run: ~/.cargo/bin/sccache -z
       - run: ./build.sh
+      - run: ninja -C out/Release pangea_naive
       - run: ~/.cargo/bin/sccache -s
       - run: ../tests/basic.sh out/Release/naive
         # No real or emulated environment is available to test this.
@@ -350,7 +362,23 @@ jobs:
         run: gh release upload "${GITHUB_REF##*/}"  ${{ env.BUNDLE }}.zip --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Pack pangea_naive static-lib assets
+        run: |
+          mkdir pangea-naive-${{ matrix.arch }}
+          cp out/Release/obj/net/pangea_naive.lib pangea-naive-${{ matrix.arch }}/
+          cp pangea/capi/pangea_naive_capi.h pangea-naive-${{ matrix.arch }}/
+          7z a pangea-naive-${{ matrix.arch }}.zip pangea-naive-${{ matrix.arch }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pangea-naive-${{ matrix.arch }}.zip
+          path: src/pangea-naive-${{ matrix.arch }}.zip
+      - name: Upload pangea_naive static-lib assets
+        if: ${{ github.event_name == 'release' }}
+        run: gh release upload "${GITHUB_REF##*/}" pangea-naive-${{ matrix.arch }}.zip --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   mac-x64:
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.windows_only }}
     needs: cache-toolchains-mac-x64
     runs-on: macos-15-intel
     strategy:
@@ -402,6 +430,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   mac-arm64:
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.windows_only }}
     needs: cache-toolchains-mac-arm64
     runs-on: macos-15
     strategy:
@@ -453,6 +482,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   openwrt:
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.windows_only }}
     needs: cache-toolchains-posix
     runs-on: ubuntu-22.04
     strategy:
