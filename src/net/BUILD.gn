@@ -2134,4 +2134,9 @@ static_library("pangea_naive") {
   ]
 
   complete_static_lib = true
+
+  # Embed every .obj in the .lib (not thin path references) so it is
+  # redistributable: the desktop daemon downloads and cgo-links this lib with
+  # no build tree present. See //build/config/compiler:thin_archive.
+  configs -= [ "//build/config/compiler:thin_archive" ]
 }
