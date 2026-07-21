@@ -23,6 +23,9 @@ env:
   CCACHE_MAXSIZE: 200M
   CCACHE_MAXFILES: 0
   SCCACHE_CACHE_SIZE: 200M
+# gh release upload needs write access; the default GITHUB_TOKEN is read-only.
+permissions:
+  contents: write
 jobs:
   cache-toolchains-posix:
     if: ${{ github.event_name != 'workflow_dispatch' || !inputs.windows_only }}
@@ -308,7 +311,11 @@ jobs:
       matrix:
         arch: [x64, x86, arm64]
     env:
-      EXTRA_FLAGS: 'target_cpu="${{ matrix.arch }}"'
+      # pangea_naive.lib is cgo-linked by the desktop daemon with a stock
+      # clang-cl, so it must be native COFF objects, not thin-LTO bitcode
+      # (which only links against the exact pinned Chromium clang). is_cfi
+      # depends on LTO, so it is disabled alongside it.
+      EXTRA_FLAGS: 'target_cpu="${{ matrix.arch }}" use_thin_lto=false is_cfi=false'
       BUNDLE: naiveproxy-${{ github.event.release.tag_name }}-${{ github.job }}-${{ matrix.arch }}
     steps:
       - uses: actions/checkout@v4
@@ -362,6 +369,9 @@ jobs:
           path: src/sha256sum.txt
       - name: Upload naiveproxy assets
         if: ${{ github.event_name == 'release' }}
+        # Don't let an executable-bundle upload hiccup abort the job before the
+        # desktop-critical pangea_naive.lib upload below.
+        continue-on-error: true
         run: gh release upload "${GITHUB_REF##*/}"  ${{ env.BUNDLE }}.zip --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
