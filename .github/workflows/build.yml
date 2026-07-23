@@ -399,7 +399,10 @@ jobs:
       matrix:
         arch: [x64]
     env:
-      EXTRA_FLAGS: 'target_cpu="${{ matrix.arch }}"'
+      # libpangea_naive.a is cgo-linked by the desktop daemon with the stock
+      # Apple clang, so it must hold native Mach-O objects, not thin-LTO
+      # bitcode (which only links against the exact pinned Chromium clang).
+      EXTRA_FLAGS: 'target_cpu="${{ matrix.arch }}" use_thin_lto=false'
       BUNDLE: naiveproxy-${{ github.event.release.tag_name }}-${{ github.job }}-${{ matrix.arch }}
     steps:
       - uses: actions/checkout@v4
@@ -439,7 +442,26 @@ jobs:
           path: src/sha256sum.txt
       - name: Upload naiveproxy assets
         if: ${{ github.event_name == 'release' }}
+        # Don't let an executable-bundle upload hiccup abort the job before the
+        # desktop-critical libpangea_naive.a upload below.
+        continue-on-error: true
         run: gh release upload "${GITHUB_REF##*/}" ${{ env.BUNDLE }}.tar.xz --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Pack pangea_naive static-lib assets
+        run: |
+          ninja -C out/Release pangea_naive
+          mkdir pangea-naive-mac-${{ matrix.arch }}
+          cp out/Release/obj/net/libpangea_naive.a pangea-naive-mac-${{ matrix.arch }}/
+          cp pangea/capi/pangea_naive_capi.h pangea-naive-mac-${{ matrix.arch }}/
+          zip -r pangea-naive-mac-${{ matrix.arch }}.zip pangea-naive-mac-${{ matrix.arch }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pangea-naive-mac-${{ matrix.arch }}.zip
+          path: src/pangea-naive-mac-${{ matrix.arch }}.zip
+      - name: Upload pangea_naive static-lib assets
+        if: ${{ github.event_name == 'release' }}
+        run: gh release upload "${GITHUB_REF##*/}" pangea-naive-mac-${{ matrix.arch }}.zip --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   mac-arm64:
@@ -451,7 +473,10 @@ jobs:
       matrix:
         arch: [arm64]
     env:
-      EXTRA_FLAGS: 'target_cpu="${{ matrix.arch }}"'
+      # libpangea_naive.a is cgo-linked by the desktop daemon with the stock
+      # Apple clang, so it must hold native Mach-O objects, not thin-LTO
+      # bitcode (which only links against the exact pinned Chromium clang).
+      EXTRA_FLAGS: 'target_cpu="${{ matrix.arch }}" use_thin_lto=false'
       BUNDLE: naiveproxy-${{ github.event.release.tag_name }}-${{ github.job }}-${{ matrix.arch }}
     steps:
       - uses: actions/checkout@v4
@@ -491,6 +516,25 @@ jobs:
           path: src/sha256sum.txt
       - name: Upload naiveproxy assets
         if: ${{ github.event_name == 'release' }}
+        # Don't let an executable-bundle upload hiccup abort the job before the
+        # desktop-critical libpangea_naive.a upload below.
+        continue-on-error: true
         run: gh release upload "${GITHUB_REF##*/}" ${{ env.BUNDLE }}.tar.xz --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Pack pangea_naive static-lib assets
+        run: |
+          ninja -C out/Release pangea_naive
+          mkdir pangea-naive-mac-${{ matrix.arch }}
+          cp out/Release/obj/net/libpangea_naive.a pangea-naive-mac-${{ matrix.arch }}/
+          cp pangea/capi/pangea_naive_capi.h pangea-naive-mac-${{ matrix.arch }}/
+          zip -r pangea-naive-mac-${{ matrix.arch }}.zip pangea-naive-mac-${{ matrix.arch }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pangea-naive-mac-${{ matrix.arch }}.zip
+          path: src/pangea-naive-mac-${{ matrix.arch }}.zip
+      - name: Upload pangea_naive static-lib assets
+        if: ${{ github.event_name == 'release' }}
+        run: gh release upload "${GITHUB_REF##*/}" pangea-naive-mac-${{ matrix.arch }}.zip --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
