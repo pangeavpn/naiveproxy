@@ -20,6 +20,7 @@
 #include "base/functional/callback.h"
 #include "base/json/json_reader.h"
 #include "base/location.h"
+#include "base/logging.h"
 #include "base/json/json_writer.h"
 #include "base/run_loop.h"
 #include "base/strings/escape.h"
@@ -70,6 +71,17 @@ constexpr net::NetworkTrafficAnnotationTag kTrafficAnnotation =
 void EnsureProcessBootstrap() {
   static std::once_flag once;
   std::call_once(once, [] {
+    // Without this a CHECK/FATAL dies silently, taking the host process with
+    // it. Set PANGEA_NAIVE_VERBOSE=1 for INFO-level chatter.
+    logging::LoggingSettings log_settings;
+    log_settings.logging_dest = logging::LOG_TO_STDERR;
+    logging::InitLogging(log_settings);
+    logging::SetLogItems(/*enable_process_id=*/false, /*enable_thread_id=*/true,
+                         /*enable_timestamp=*/true, /*enable_tickcount=*/false);
+    logging::SetMinLogLevel(std::getenv("PANGEA_NAIVE_VERBOSE") != nullptr
+                                ? logging::LOGGING_INFO
+                                : logging::LOGGING_WARNING);
+
     if (!base::CommandLine::InitializedForCurrentProcess()) {
       base::CommandLine::Init(0, nullptr);
     }
