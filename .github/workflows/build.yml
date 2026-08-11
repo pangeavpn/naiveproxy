@@ -14,6 +14,10 @@ on:
         description: "Build only the Windows jobs (for validating pangea_naive changes without the full cross-platform matrix)"
         type: boolean
         default: false
+      android_only:
+        description: "Build only the Android jobs (for validating the arm64 pangea_naive archive)"
+        type: boolean
+        default: false
 defaults:
   run:
     shell: bash
@@ -69,6 +73,7 @@ jobs:
           fi
       - run: EXTRA_FLAGS='target_os="android" target_cpu="x64"' WARMUP_HOST_TOOLS=1 ./build.sh
   cache-toolchains-win:
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.android_only }}
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
@@ -99,7 +104,7 @@ jobs:
             unzip ninja-win.zip -d ~/bin
           fi
   cache-toolchains-mac-x64:
-    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.windows_only }}
+    if: ${{ github.event_name != 'workflow_dispatch' || !(inputs.windows_only || inputs.android_only) }}
     runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
@@ -112,7 +117,7 @@ jobs:
           key: toolchains-pgo-mac-x64-${{ hashFiles('CHROMIUM_VERSION') }}-v${{ env.CACHE_EPOCH }}
       - run: EXTRA_FLAGS='target_cpu="x64"' ./get-clang.sh
   cache-toolchains-mac-arm64:
-    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.windows_only }}
+    if: ${{ github.event_name != 'workflow_dispatch' || !(inputs.windows_only || inputs.android_only) }}
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -125,7 +130,7 @@ jobs:
           key: toolchains-pgo-mac-arm64-${{ hashFiles('CHROMIUM_VERSION') }}-v${{ env.CACHE_EPOCH }}
       - run: EXTRA_FLAGS='target_cpu="arm64"' ./get-clang.sh
   linux:
-    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.windows_only }}
+    if: ${{ github.event_name != 'workflow_dispatch' || !(inputs.windows_only || inputs.android_only) }}
     needs: cache-toolchains-posix
     runs-on: ubuntu-22.04
     strategy:
@@ -223,8 +228,8 @@ jobs:
             abi: armeabi-v7a
     env:
       # arm64 also ships libpangea_naive.a, which gomobile cgo-links with the
-      # NDK clang: native objects, not thin-LTO bitcode (is_cfi rides on LTO).
-      EXTRA_FLAGS: 'target_cpu="${{ matrix.arch }}" target_os="android"${{ matrix.arch == ''arm64'' && '' use_thin_lto=false is_cfi=false'' || '''' }}'
+      # NDK clang: it reads neither thin-LTO bitcode nor PAuth relocations.
+      EXTRA_FLAGS: 'target_cpu="${{ matrix.arch }}" target_os="android"${{ matrix.arch == ''arm64'' && '' use_thin_lto=false is_cfi=false arm_control_flow_integrity="none"'' || '''' }}'
       BUNDLE: naiveproxy-plugin-${{ github.event.release.tag_name || 'v1.1.1.1-1' }}-${{ matrix.abi }}.apk
     steps:
       - uses: actions/checkout@v4
@@ -331,6 +336,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   win:
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.android_only }}
     needs: cache-toolchains-win
     runs-on: windows-2022
     strategy:
@@ -418,7 +424,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   mac-x64:
-    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.windows_only }}
+    if: ${{ github.event_name != 'workflow_dispatch' || !(inputs.windows_only || inputs.android_only) }}
     needs: cache-toolchains-mac-x64
     runs-on: macos-15-intel
     strategy:
@@ -492,7 +498,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   mac-arm64:
-    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.windows_only }}
+    if: ${{ github.event_name != 'workflow_dispatch' || !(inputs.windows_only || inputs.android_only) }}
     needs: cache-toolchains-mac-arm64
     runs-on: macos-15
     strategy:
