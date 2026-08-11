@@ -228,8 +228,8 @@ jobs:
             abi: armeabi-v7a
     env:
       # arm64 also ships libpangea_naive.a, which gomobile cgo-links with the
-      # NDK clang: it reads neither thin-LTO bitcode nor PAuth relocations.
-      EXTRA_FLAGS: 'target_cpu="${{ matrix.arch }}" target_os="android"${{ matrix.arch == ''arm64'' && '' use_thin_lto=false is_cfi=false arm_control_flow_integrity="none"'' || '''' }}'
+      # NDK clang: native objects, not thin-LTO bitcode (is_cfi rides on LTO).
+      EXTRA_FLAGS: 'target_cpu="${{ matrix.arch }}" target_os="android"${{ matrix.arch == ''arm64'' && '' use_thin_lto=false is_cfi=false'' || '''' }}'
       BUNDLE: naiveproxy-plugin-${{ github.event.release.tag_name || 'v1.1.1.1-1' }}-${{ matrix.abi }}.apk
     steps:
       - uses: actions/checkout@v4
