@@ -12,6 +12,11 @@
 extern "C" {
 #endif
 
+// Called with every socket the engine opens, before bind/connect; must return
+// non-zero. Android-only, no-op elsewhere. Set before PangeaNaiveStart.
+typedef int (*PangeaNaiveSocketProtector)(int fd);
+void PangeaNaiveSetSocketProtector(PangeaNaiveSocketProtector protector);
+
 // Starts the engine on a dedicated background thread. configJson is a JSON
 // object: {"remoteHost":string,"remotePort":int,"username":string,
 // "password":string,"serverName":string (optional, defaults to remoteHost)}.

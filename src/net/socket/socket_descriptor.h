@@ -27,6 +27,13 @@ SocketDescriptor NET_EXPORT CreatePlatformSocket(int family,
                                                  int type,
                                                  int protocol);
 
+#if BUILDFLAG(IS_ANDROID)
+// Called with every socket this stack opens, before it is bound or connected,
+// so an embedder inside a VpnService can VpnService.protect() it.
+using SocketProtector = bool (*)(int);
+void NET_EXPORT SetSocketProtector(SocketProtector protector);
+#endif
+
 }  // namespace net
 
 #endif  // NET_SOCKET_SOCKET_DESCRIPTOR_H_

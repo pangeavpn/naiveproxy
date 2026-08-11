@@ -30,6 +30,7 @@
 #include "base/task/thread_pool/thread_pool_instance.h"
 #include "base/time/time.h"
 #include "base/values.h"
+#include "build/build_config.h"
 #include "net/base/ip_endpoint.h"
 #include "net/base/net_errors.h"
 #include "net/cert/cert_verifier.h"
@@ -45,6 +46,7 @@
 #include "net/proxy_resolution/proxy_config_with_annotation.h"
 #include "net/socket/client_socket_pool.h"
 #include "net/socket/client_socket_pool_manager.h"
+#include "net/socket/socket_descriptor.h"
 #include "net/socket/tcp_server_socket.h"
 #include "net/tools/naive/naive_config.h"
 #include "net/tools/naive/naive_protocol.h"
@@ -245,7 +247,29 @@ bool BuildNaiveConfig(const base::DictValue& in,
   return true;
 }
 
+#if BUILDFLAG(IS_ANDROID)
+std::atomic<PangeaNaiveSocketProtector> g_protector{nullptr};
+
+// net's hook is bool(*)(int) and cannot capture, so the C callback is reached
+// through this global rather than bound into the pointer.
+bool ProtectThunk(int fd) {
+  PangeaNaiveSocketProtector protector =
+      g_protector.load(std::memory_order_acquire);
+  return protector == nullptr || protector(fd) != 0;
+}
+#endif
+
 }  // namespace
+
+extern "C" void PangeaNaiveSetSocketProtector(
+    PangeaNaiveSocketProtector protector) {
+#if BUILDFLAG(IS_ANDROID)
+  g_protector.store(protector, std::memory_order_release);
+  net::SetSocketProtector(protector == nullptr ? nullptr : &ProtectThunk);
+#else
+  (void)protector;
+#endif
+}
 
 extern "C" int PangeaNaiveStart(const char* configJson) {
   if (g_running.load()) {

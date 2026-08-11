@@ -13,7 +13,7 @@ on:
       windows_only:
         description: "Build only the Windows jobs (for validating pangea_naive changes without the full cross-platform matrix)"
         type: boolean
-        default: true
+        default: false
 defaults:
   run:
     shell: bash
@@ -222,7 +222,9 @@ jobs:
           - arch: arm
             abi: armeabi-v7a
     env:
-      EXTRA_FLAGS: 'target_cpu="${{ matrix.arch }}" target_os="android"'
+      # arm64 also ships libpangea_naive.a, which gomobile cgo-links with the
+      # NDK clang: native objects, not thin-LTO bitcode (is_cfi rides on LTO).
+      EXTRA_FLAGS: 'target_cpu="${{ matrix.arch }}" target_os="android"${{ matrix.arch == ''arm64'' && '' use_thin_lto=false is_cfi=false'' || '''' }}'
       BUNDLE: naiveproxy-plugin-${{ github.event.release.tag_name || 'v1.1.1.1-1' }}-${{ matrix.abi }}.apk
     steps:
       - uses: actions/checkout@v4
@@ -300,7 +302,28 @@ jobs:
       - name: Upload naiveproxy assets
         if: ${{ github.event_name == 'release' }}
         working-directory: apk/app/build/outputs/apk/release
+        # Don't let an APK upload hiccup abort the job before the
+        # Android-critical libpangea_naive.a upload below.
+        continue-on-error: true
         run: gh release upload "${GITHUB_REF##*/}" ${{ env.BUNDLE }} --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Pack pangea_naive static-lib assets
+        if: ${{ matrix.arch == 'arm64' }}
+        run: |
+          ninja -C out/Release pangea_naive
+          mkdir pangea-naive-android-${{ matrix.abi }}
+          cp out/Release/obj/net/libpangea_naive.a pangea-naive-android-${{ matrix.abi }}/
+          cp pangea/capi/pangea_naive_capi.h pangea-naive-android-${{ matrix.abi }}/
+          zip -r pangea-naive-android-${{ matrix.abi }}.zip pangea-naive-android-${{ matrix.abi }}
+      - uses: actions/upload-artifact@v4
+        if: ${{ matrix.arch == 'arm64' }}
+        with:
+          name: pangea-naive-android-${{ matrix.abi }}.zip
+          path: src/pangea-naive-android-${{ matrix.abi }}.zip
+      - name: Upload pangea_naive static-lib assets
+        if: ${{ github.event_name == 'release' && matrix.arch == 'arm64' }}
+        run: gh release upload "${GITHUB_REF##*/}" pangea-naive-android-${{ matrix.abi }}.zip --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   win:

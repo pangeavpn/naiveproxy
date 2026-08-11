@@ -4,6 +4,9 @@
 
 #include "net/socket/socket_descriptor.h"
 
+#include <atomic>
+
+#include "base/logging.h"
 #include "build/build_config.h"
 
 #if BUILDFLAG(IS_WIN)
@@ -21,6 +24,16 @@
 
 namespace net {
 
+#if BUILDFLAG(IS_ANDROID)
+namespace {
+std::atomic<SocketProtector> g_socket_protector{nullptr};
+}
+
+void SetSocketProtector(SocketProtector protector) {
+  g_socket_protector.store(protector, std::memory_order_release);
+}
+#endif
+
 SocketDescriptor CreatePlatformSocket(int family, int type, int protocol) {
 #if BUILDFLAG(IS_WIN)
   EnsureWinsockInit();
@@ -37,6 +50,12 @@ SocketDescriptor CreatePlatformSocket(int family, int type, int protocol) {
   return result;
 #elif BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
   SocketDescriptor result = ::socket(family, type, protocol);
+#if BUILDFLAG(IS_ANDROID)
+  SocketProtector protector = g_socket_protector.load(std::memory_order_acquire);
+  if (result != kInvalidSocket && protector && !protector(result)) {
+    PLOG(ERROR) << "VpnService.protect() rejected fd " << result;
+  }
+#endif
   return result;
 #endif  // BUILDFLAG(IS_WIN)
 }
