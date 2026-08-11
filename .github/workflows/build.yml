@@ -278,36 +278,8 @@ jobs:
       - run: ccache -s && ccache --evict-older-than 1d
       - run: ./get-android-sys.sh
       - run: ../tests/basic.sh out/Release/naive
-      - name: Gradle cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.gradle
-          key: gradle-${{ hashFiles('**/*.gradle.kts') }}
-      - name: Create APK
-        working-directory: apk
-        env:
-          APK_ABI: ${{ matrix.abi }}
-          APK_VERSION_NAME: ${{ github.event.release.tag_name || 'v1.1.1.1-1' }}
-          KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASS }}
-        run: |
-          mkdir -p app/libs/$APK_ABI
-          cp ../src/out/Release/naive app/libs/$APK_ABI/libnaive.so
-          ./gradlew :app:assembleRelease
-          openssl sha256 app/build/outputs/apk/release/${{ env.BUNDLE }} >sha256sum.txt
-          echo "SHA256SUM=$(cut -d' ' -f2 sha256sum.txt)" >>$GITHUB_ENV
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.BUNDLE }} sha256 ${{ env.SHA256SUM }}
-          path: apk/sha256sum.txt
-      - name: Upload naiveproxy assets
-        if: ${{ github.event_name == 'release' }}
-        working-directory: apk/app/build/outputs/apk/release
-        # Don't let an APK upload hiccup abort the job before the
-        # Android-critical libpangea_naive.a upload below.
-        continue-on-error: true
-        run: gh release upload "${GITHUB_REF##*/}" ${{ env.BUNDLE }} --clobber
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Ahead of the APK block on purpose: that block needs KEYSTORE_PASS,
+      # which this fork does not carry, so it fails and would strand these.
       - name: Pack pangea_naive static-lib assets
         if: ${{ matrix.arch == 'arm64' }}
         run: |
@@ -324,6 +296,38 @@ jobs:
       - name: Upload pangea_naive static-lib assets
         if: ${{ github.event_name == 'release' && matrix.arch == 'arm64' }}
         run: gh release upload "${GITHUB_REF##*/}" pangea-naive-android-${{ matrix.abi }}.zip --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Gradle cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle
+          key: gradle-${{ hashFiles('**/*.gradle.kts') }}
+      # Upstream's NekoBox plugin APK, which we do not ship. It needs a
+      # KEYSTORE_PASS this fork has no reason to hold, so it may not sign.
+      - name: Create APK
+        continue-on-error: true
+        working-directory: apk
+        env:
+          APK_ABI: ${{ matrix.abi }}
+          APK_VERSION_NAME: ${{ github.event.release.tag_name || 'v1.1.1.1-1' }}
+          KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASS }}
+        run: |
+          mkdir -p app/libs/$APK_ABI
+          cp ../src/out/Release/naive app/libs/$APK_ABI/libnaive.so
+          ./gradlew :app:assembleRelease
+          openssl sha256 app/build/outputs/apk/release/${{ env.BUNDLE }} >sha256sum.txt
+          echo "SHA256SUM=$(cut -d' ' -f2 sha256sum.txt)" >>$GITHUB_ENV
+      - uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: ${{ env.BUNDLE }} sha256 ${{ env.SHA256SUM }}
+          path: apk/sha256sum.txt
+      - name: Upload naiveproxy assets
+        if: ${{ github.event_name == 'release' }}
+        working-directory: apk/app/build/outputs/apk/release
+        continue-on-error: true
+        run: gh release upload "${GITHUB_REF##*/}" ${{ env.BUNDLE }} --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   win:
